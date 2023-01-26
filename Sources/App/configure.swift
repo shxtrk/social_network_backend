@@ -9,7 +9,11 @@ public func configure(_ app: Application) throws {
 
     app.databases.use(.sqlite(.file("db.sqlite")), as: .sqlite)
 
-    app.migrations.add(CreateTodo())
+    app.migrations.add(CreateUser())
+    app.migrations.add(CreateUserToken())
+    
+    // TODO: remove automigration
+    try app.autoMigrate().wait()
 
     // register routes
     try routes(app)
