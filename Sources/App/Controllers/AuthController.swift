@@ -9,10 +9,10 @@ struct AuthController: RouteCollection {
 }
 
 extension AuthController {
-    func auth(req: Request) async throws -> UserToken {
+    func auth(req: Request) async throws -> UserToken.PrivateRepresentation {
         let user = try req.auth.require(User.self)
         let token = try user.generateToken()
         try await token.save(on: req.db)
-        return token
+        return token.privateRepresentation
     }
 }

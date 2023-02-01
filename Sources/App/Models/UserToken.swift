@@ -32,3 +32,16 @@ extension User {
         )
     }
 }
+
+// MARK: - DTO
+
+extension UserToken {
+    struct PrivateRepresentation: Content {
+        let userId: UUID
+        let token: String
+    }
+    
+    var privateRepresentation: PrivateRepresentation {
+        PrivateRepresentation(userId: self.$user.id, token: self.value)
+    }
+}

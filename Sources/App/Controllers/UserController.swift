@@ -7,16 +7,16 @@ struct UserController: RouteCollection {
         let users = routes.grouped("users")
         users.post(use: create)
         
-        let tokenProtected = users.grouped(UserToken.authenticator())
-        tokenProtected.group(":userID") { user in
-            user.get(use: info)
-            user.delete(use: delete)
-        }
+        let user = users.grouped(":userID")
+        user.get(use: get)
+        
+        let tokenProtectedUser = user.grouped(UserToken.authenticator())
+        tokenProtectedUser.delete(use: delete)
     }
 }
 
 extension UserController {
-    func create(req: Request) async throws -> User.Info {
+    func create(req: Request) async throws -> User.PrivateRepresentation {
         try User.Create.validate(content: req)
         let create = try req.content.decode(User.Create.self)
         guard create.password == create.confirmPassword else {
@@ -28,25 +28,22 @@ extension UserController {
             passwordHash: Bcrypt.hash(create.password)
         )
         try await user.save(on: req.db)
-        guard let userInfo = user.info else {
-            throw Abort(.notFound)
-        }
-        return userInfo
-    }
-}
-
-extension UserController {
-    func info(req: Request) async throws -> User.Info {
-        let userId = try req.auth.require(User.self).requireID()
-        guard userId == req.parameters.get("userID") else {
-            throw Abort(.unauthorized)
-        }
-        guard let userInfo = try await User.find(userId, on: req.db)?.info else {
+        guard let userInfo = user.privateRepresentation else {
             throw Abort(.notFound)
         }
         return userInfo
     }
     
+    func get(req: Request) async throws -> User.PublicRepresentation {
+        guard let publicUser = try await User.find(req.parameters.get("userID"),
+                                                   on: req.db)?.publicRepresentation else {
+            throw Abort(.notFound)
+        }
+        return publicUser
+    }
+}
+
+extension UserController {
     func delete(req: Request) async throws -> HTTPStatus {
         let userId = try req.auth.require(User.self).requireID()
         guard userId == req.parameters.get("userID") else {

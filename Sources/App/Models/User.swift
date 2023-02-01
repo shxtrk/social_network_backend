@@ -15,6 +15,9 @@ final class User: Model, Content {
 
     @Field(key: "password_hash")
     var passwordHash: String
+    
+    @Children(for: \.$user)
+    var posts: [UserPost]
 
     init() { }
 
@@ -56,16 +59,30 @@ extension User {
 }
 
 extension User {
-    struct Info: Content {
+    struct PrivateRepresentation: Content {
         var id: UUID
         var userName: String
         var email: String
     }
     
-    var info: Info? {
+    var privateRepresentation: PrivateRepresentation? {
         guard let id = self.id else {
             return nil
         }
-        return Info(id: id, userName: self.userName, email: self.email)
+        return PrivateRepresentation(id: id, userName: self.userName, email: self.email)
+    }
+}
+
+extension User {
+    struct PublicRepresentation: Content {
+        var id: UUID
+        var userName: String
+    }
+    
+    var publicRepresentation: PublicRepresentation? {
+        guard let id = self.id else {
+            return nil
+        }
+        return PublicRepresentation(id: id, userName: self.userName)
     }
 }
