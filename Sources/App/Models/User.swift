@@ -59,15 +59,27 @@ extension User {
 }
 
 extension User {
+    struct Update: Content, Validatable {
+        var userName: String?
+        var email: String?
+        
+        static func validations(_ validations: inout Validations) {
+            validations.add("userName", as: String?.self, is: .nil || !.empty, required: false)
+            validations.add("email", as: String?.self, is: .nil || .email)
+        }
+    }
+}
+
+extension User {
     struct PrivateRepresentation: Content {
         var id: UUID
         var userName: String
         var email: String
     }
     
-    var privateRepresentation: PrivateRepresentation? {
+    func privateRepresentation() throws -> PrivateRepresentation {
         guard let id = self.id else {
-            return nil
+            throw Abort(.internalServerError)
         }
         return PrivateRepresentation(id: id, userName: self.userName, email: self.email)
     }
@@ -79,9 +91,9 @@ extension User {
         var userName: String
     }
     
-    var publicRepresentation: PublicRepresentation? {
+    func publicRepresentation() throws -> PublicRepresentation {
         guard let id = self.id else {
-            return nil
+            throw Abort(.internalServerError)
         }
         return PublicRepresentation(id: id, userName: self.userName)
     }

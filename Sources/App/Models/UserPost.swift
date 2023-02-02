@@ -39,6 +39,8 @@ final class UserPost: Model, Content {
     }
 }
 
+// MARK: - DTO
+
 extension UserPost {
     struct Create: Content {
         var text: String
@@ -55,11 +57,11 @@ extension UserPost {
         var image: String?
     }
     
-    var publicRepresentation: PublicRepresentation? {
+    func publicRepresentation() throws -> PublicRepresentation {
         guard let id = self.id,
               let createdAt = self.createdAt,
               let updatedAt = self.updatedAt else {
-            return nil
+            throw Abort(.internalServerError)
         }
         
         return PublicRepresentation(id: id,

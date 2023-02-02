@@ -3,52 +3,56 @@ import Vapor
 
 struct UserPostController: RouteCollection {
     func boot(routes: RoutesBuilder) throws {
-        let userPosts = routes.grouped("users").grouped(":userID").grouped("posts")
+        let tokenProtected = routes.grouped(UserToken.authenticator())
+        
+        let userPosts = tokenProtected.grouped("users")
+            .grouped(":userID")
+            .grouped("posts")
+        userPosts.post(use: create)
         userPosts.get(use: getAll)
         
-        let tokenProtectedUserPosts = userPosts.grouped(UserToken.authenticator())
-        tokenProtectedUserPosts.post(use: create)
-        tokenProtectedUserPosts.group(":postID") { userPost in
-            userPost.grouped("upload_image").post(use: uploadImage)
-            userPost.delete(use: delete)
-        }
+        let userPost = userPosts.grouped(":postID")
+        userPost.get(use: getUserPost)
+        userPost.grouped("upload_image").post(use: uploadImage)
+        userPost.delete(use: delete)
     }
 }
 
 extension UserPostController {
     func getAll(req: Request) async throws -> [UserPost.PublicRepresentation] {
+        try req.auth.require(User.self)
         guard let user = try await User.find(req.parameters.get("userID"), on: req.db) else {
             throw Abort(.notFound)
         }
-        return try await user.$posts.get(on: req.db).compactMap { $0.publicRepresentation }
+        return try await user.$posts.get(on: req.db).map { try $0.publicRepresentation() }
     }
-}
-
-extension UserPostController {
+    
+    func getUserPost(req: Request) async throws -> UserPost.PublicRepresentation {
+        try req.auth.require(User.self)
+        guard let userPost = try await UserPost.find(req.parameters.get("postID"), on: req.db) else {
+            throw Abort(.notFound)
+        }
+        return try userPost.publicRepresentation()
+    }
+    
     func create(req: Request) async throws -> UserPost.PublicRepresentation {
         let userId = try req.auth.require(User.self).requireID()
-        guard userId == req.parameters.get("userID") else {
-            throw Abort(.unauthorized)
-        }
+        try userId.authorize(to: req.parameters.get("userID"))
+        
         let create = try req.content.decode(UserPost.Create.self)
         let userPost = UserPost(userID: userId, text: create.text)
         try await userPost.save(on: req.db)
-        guard let response = userPost.publicRepresentation else {
-            throw Abort(.notFound)
-        }
-        return response
+        return try userPost.publicRepresentation()
     }
     
     func uploadImage(req: Request) async throws -> UserPost.PublicRepresentation {
         let userId = try req.auth.require(User.self).requireID()
-        guard userId == req.parameters.get("userID") else {
-            throw Abort(.unauthorized)
-        }
+        try userId.authorize(to: req.parameters.get("userID"))
         
-        guard let userPost = try await UserPost.find(req.parameters.get("postID"), on: req.db),
-              userPost.$user.id == userId else {
+        guard let userPost = try await UserPost.find(req.parameters.get("postID"), on: req.db) else {
             throw Abort(.notFound)
         }
+        try userPost.$user.id.authorize(to: userId)
         
         let file = try req.content.decode(File.self)
         guard file.filename == req.parameters.get("postID") else {
@@ -65,22 +69,18 @@ extension UserPostController {
         userPost.image = filename
         
         try await userPost.save(on: req.db)
-        
-        guard let response = userPost.publicRepresentation else {
-            throw Abort(.notFound)
-        }
-        return response
+        return try userPost.publicRepresentation()
     }
     
     func delete(req: Request) async throws -> HTTPStatus {
         let userId = try req.auth.require(User.self).requireID()
-        guard userId == req.parameters.get("userID") else {
-            return .unauthorized
-        }
-        guard let userPost = try await UserPost.find(req.parameters.get("postID"), on: req.db),
-              userPost.$user.id == userId else {
+        try userId.authorize(to: req.parameters.get("userID"))
+        
+        guard let userPost = try await UserPost.find(req.parameters.get("postID"), on: req.db) else {
             throw Abort(.notFound)
         }
+        try userPost.$user.id.authorize(to: userId)
+        
         if let currentImage = userPost.image {
             try FileManager.default.removeItem(atPath: req.application.directory.workingDirectory + currentImage)
         }

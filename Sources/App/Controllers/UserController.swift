@@ -3,52 +3,56 @@ import Vapor
 
 struct UserController: RouteCollection {
     func boot(routes: RoutesBuilder) throws {
+        let tokenProtected = routes.grouped(UserToken.authenticator())
         
-        let users = routes.grouped("users")
-        users.post(use: create)
+        let users = tokenProtected.grouped("users")
+        users.get(use: getAllUsers)
         
         let user = users.grouped(":userID")
-        user.get(use: get)
-        
-        let tokenProtectedUser = user.grouped(UserToken.authenticator())
-        tokenProtectedUser.delete(use: delete)
+        user.get(use: getUser)
+        user.put(use: updateUser)
+        user.delete(use: deleteUser)
     }
 }
 
 extension UserController {
-    func create(req: Request) async throws -> User.PrivateRepresentation {
-        try User.Create.validate(content: req)
-        let create = try req.content.decode(User.Create.self)
-        guard create.password == create.confirmPassword else {
-            throw Abort(.badRequest, reason: "Passwords did not match")
-        }
-        let user = try User(
-            userName: create.userName,
-            email: create.email,
-            passwordHash: Bcrypt.hash(create.password)
-        )
-        try await user.save(on: req.db)
-        guard let userInfo = user.privateRepresentation else {
-            throw Abort(.notFound)
-        }
-        return userInfo
+    func getAllUsers(req: Request) async throws -> [User.PublicRepresentation] {
+        try req.auth.require(User.self)
+        return try await User.query(on: req.db).all().map { try $0.publicRepresentation() }
     }
     
-    func get(req: Request) async throws -> User.PublicRepresentation {
-        guard let publicUser = try await User.find(req.parameters.get("userID"),
-                                                   on: req.db)?.publicRepresentation else {
+    func getUser(req: Request) async throws -> User.PublicRepresentation {
+        try req.auth.require(User.self)
+        guard let user = try await User.find(req.parameters.get("userID"), on: req.db) else {
             throw Abort(.notFound)
         }
-        return publicUser
+        return try user.publicRepresentation()
     }
-}
-
-extension UserController {
-    func delete(req: Request) async throws -> HTTPStatus {
-        let userId = try req.auth.require(User.self).requireID()
-        guard userId == req.parameters.get("userID") else {
-            return .unauthorized
+    
+    func updateUser(req: Request) async throws -> User.PrivateRepresentation {
+        let user = try req.auth.require(User.self)
+        try user.requireID().authorize(to: req.parameters.get("userID"))
+        
+        try User.Update.validate(content: req)
+        let update = try req.content.decode(User.Update.self)
+        
+        if let userName = update.userName {
+            user.userName = userName
         }
+        if let email = update.email {
+            user.email = email
+        }
+        if user.hasChanges {
+            try await user.save(on: req.db)
+        }
+        
+        return try user.privateRepresentation()
+    }
+    
+    func deleteUser(req: Request) async throws -> HTTPStatus {
+        let userId = try req.auth.require(User.self).requireID()
+        try userId.authorize(to: req.parameters.get("userID"))
+        
         guard let user = try await User.find(userId, on: req.db) else {
             throw Abort(.notFound)
         }
