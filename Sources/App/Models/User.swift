@@ -18,6 +18,12 @@ final class User: Model, Content {
     
     @Children(for: \.$user)
     var posts: [UserPost]
+    
+    @Siblings(through: UserFollower.self, from: \.$following, to: \.$follower)
+    public var followers: [User]
+    
+    @Siblings(through: UserFollower.self, from: \.$follower, to: \.$following)
+    public var following: [User]
 
     init() { }
 
@@ -96,5 +102,24 @@ extension User {
             throw Abort(.internalServerError)
         }
         return PublicRepresentation(id: id, userName: self.userName)
+    }
+}
+
+extension User {
+    struct RichPublicRepresentation: Content {
+        var id: UUID
+        var userName: String
+        var following: [User.PublicRepresentation]
+        var followers: [User.PublicRepresentation]
+    }
+    
+    func richPublicRepresentation(following: [User], followers: [User]) throws -> RichPublicRepresentation {
+        guard let id = self.id else {
+            throw Abort(.internalServerError)
+        }
+        return RichPublicRepresentation(id: id,
+                                        userName: self.userName,
+                                        following: try following.map { try $0.publicRepresentation() },
+                                        followers: try followers.map { try $0.publicRepresentation() })
     }
 }

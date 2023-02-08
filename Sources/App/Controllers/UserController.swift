@@ -21,12 +21,16 @@ extension UserController {
         return try await User.query(on: req.db).all().map { try $0.publicRepresentation() }
     }
     
-    func getUser(req: Request) async throws -> User.PublicRepresentation {
+    func getUser(req: Request) async throws -> User.RichPublicRepresentation {
         try req.auth.require(User.self)
         guard let user = try await User.find(req.parameters.get("userID"), on: req.db) else {
             throw Abort(.notFound)
         }
-        return try user.publicRepresentation()
+
+        let following = try await user.$following.get(on: req.db)
+        let followers = try await user.$followers.get(on: req.db)
+        
+        return try user.richPublicRepresentation(following: following, followers: followers)
     }
     
     func updateUser(req: Request) async throws -> User.PrivateRepresentation {
