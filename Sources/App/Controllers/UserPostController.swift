@@ -24,7 +24,9 @@ extension UserPostController {
         guard let user = try await User.find(req.parameters.get("userID"), on: req.db) else {
             throw Abort(.notFound)
         }
-        return try await user.$posts.get(on: req.db).map { try $0.publicRepresentation() }
+        let userId = try user.requireID()
+        let posts = try await UserPost.query(on: req.db).with(\.$likes).filter(\.$user.$id == userId).all()
+        return try posts.map { try $0.publicRepresentation(likes: $0.likes) }
     }
     
     func getUserPost(req: Request) async throws -> UserPost.PublicRepresentation {
@@ -32,7 +34,7 @@ extension UserPostController {
         guard let userPost = try await UserPost.find(req.parameters.get("postID"), on: req.db) else {
             throw Abort(.notFound)
         }
-        return try userPost.publicRepresentation()
+        return try userPost.publicRepresentation(likes: userPost.likes)
     }
     
     func create(req: Request) async throws -> UserPost.PublicRepresentation {
@@ -42,7 +44,7 @@ extension UserPostController {
         let create = try req.content.decode(UserPost.Create.self)
         let userPost = UserPost(userID: userId, text: create.text)
         try await userPost.save(on: req.db)
-        return try userPost.publicRepresentation()
+        return try userPost.publicRepresentation(likes: [])
     }
     
     func uploadImage(req: Request) async throws -> UserPost.PublicRepresentation {
@@ -69,7 +71,7 @@ extension UserPostController {
         userPost.image = filename
         
         try await userPost.save(on: req.db)
-        return try userPost.publicRepresentation()
+        return try userPost.publicRepresentation(likes: userPost.likes)
     }
     
     func delete(req: Request) async throws -> HTTPStatus {

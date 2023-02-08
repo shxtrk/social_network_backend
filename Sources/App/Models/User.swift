@@ -19,6 +19,9 @@ final class User: Model, Content {
     @Children(for: \.$user)
     var posts: [UserPost]
     
+    @Siblings(through: PostLike.self, from: \.$user, to: \.$userPost)
+    public var likes: [UserPost]
+    
     @Siblings(through: UserFollower.self, from: \.$following, to: \.$follower)
     public var followers: [User]
     

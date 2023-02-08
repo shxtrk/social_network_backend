@@ -12,6 +12,8 @@ struct UserController: RouteCollection {
         user.get(use: getUser)
         user.put(use: updateUser)
         user.delete(use: deleteUser)
+        
+        user.grouped("likes").get(use: likes)
     }
 }
 
@@ -62,5 +64,17 @@ extension UserController {
         }
         try await user.delete(on: req.db)
         return .noContent
+    }
+    
+    func likes(req: Request) async throws -> [PostLikeRepresentation] {
+        let user = try req.auth.require(User.self)
+        let userId = try user.requireID()
+        try userId.authorize(to: req.parameters.get("userID"))
+        
+        let likedPosts = try await user.$likes.get(on: req.db)
+        return likedPosts.compactMap {
+            guard let postId = $0.id else { return nil }
+            return PostLikeRepresentation(postId: postId, userId: userId)
+        }
     }
 }

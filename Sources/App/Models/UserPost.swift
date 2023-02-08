@@ -22,6 +22,9 @@ final class UserPost: Model, Content {
     @OptionalField(key: "image")
     var image: String?
     
+    @Siblings(through: PostLike.self, from: \.$userPost, to: \.$user)
+    public var likes: [User]
+    
     init() { }
 
     init(id: UUID? = nil,
@@ -55,13 +58,19 @@ extension UserPost {
         var createdAt: Date
         var updatedAt: Date
         var image: String?
+        var likes: [PostLikeRepresentation]
     }
     
-    func publicRepresentation() throws -> PublicRepresentation {
+    func publicRepresentation(likes: [User]) throws -> PublicRepresentation {
         guard let id = self.id,
               let createdAt = self.createdAt,
               let updatedAt = self.updatedAt else {
             throw Abort(.internalServerError)
+        }
+        
+        let likes: [PostLikeRepresentation] = likes.compactMap {
+            guard let userId = $0.id else { return nil }
+            return PostLikeRepresentation(postId: id, userId: userId)
         }
         
         return PublicRepresentation(id: id,
@@ -69,7 +78,7 @@ extension UserPost {
                                     text: self.text,
                                     createdAt: createdAt,
                                     updatedAt: updatedAt,
-                                    image: image)
+                                    image: image,
+                                    likes: likes)
     }
 }
-
