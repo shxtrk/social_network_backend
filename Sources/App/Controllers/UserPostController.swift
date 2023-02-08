@@ -31,7 +31,10 @@ extension UserPostController {
     
     func getUserPost(req: Request) async throws -> UserPost.PublicRepresentation {
         try req.auth.require(User.self)
-        guard let userPost = try await UserPost.find(req.parameters.get("postID"), on: req.db) else {
+        guard let postId = try await UserPost.find(req.parameters.get("postID"), on: req.db)?.requireID() else {
+            throw Abort(.notFound)
+        }
+        guard let userPost = try await UserPost.query(on: req.db).with(\.$likes).filter(\.$id == postId).first() else {
             throw Abort(.notFound)
         }
         return try userPost.publicRepresentation(likes: userPost.likes)
@@ -51,7 +54,10 @@ extension UserPostController {
         let userId = try req.auth.require(User.self).requireID()
         try userId.authorize(to: req.parameters.get("userID"))
         
-        guard let userPost = try await UserPost.find(req.parameters.get("postID"), on: req.db) else {
+        guard let postId = try await UserPost.find(req.parameters.get("postID"), on: req.db)?.requireID() else {
+            throw Abort(.notFound)
+        }
+        guard let userPost = try await UserPost.query(on: req.db).with(\.$likes).filter(\.$id == postId).first() else {
             throw Abort(.notFound)
         }
         try userPost.$user.id.authorize(to: userId)
