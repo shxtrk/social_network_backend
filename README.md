@@ -10,6 +10,9 @@ This is an backend written in Swift for a social network application where user 
   POST /auth
 ```
 
+* Route uses **Basic Auth**
+* All subsequent routes use Bearer Auth unless otherwise specified
+
 ### Users
 
 #### Create User
@@ -24,6 +27,8 @@ This is an backend written in Swift for a social network application where user 
 | `email`    | `string` |
 | `password`    | `string` |
 | `confirmPassword`    | `string` |
+
+* No auth required
 
 #### Get User
 
@@ -99,7 +104,7 @@ This is an backend written in Swift for a social network application where user 
 | `filename`    | `string` |
 | `extension`    | `string` |
 
-**filename** parameter shoul corespond to **postId**
+* **filename** parameter shoul correspond to **postId**
 
 #### Delete Post
 
